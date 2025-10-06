@@ -3,157 +3,253 @@
 #include <string.h>
 #include <ctype.h>
 
-#define MAX 1000
+#define MAX_SIZE 1000
+#define SUCCESS 0   
+#define ERROR 1
 
 // Stack to store digits
-int numStack[MAX];
-int top_NumStack = -1;
+int operandStack[MAX_SIZE];
+int operandTop = -1;
 
-void pushNum(int val) {
-    if (top_NumStack >= MAX) {
-        printf("Number Stack overflow.");
-        exit(1);
+int pushOperand(int val){
+    if (operandTop >= MAX_SIZE-1) {
+        fprintf(stderr, "Error: Operand stack overflow.\n");
+        return ERROR;
     }
 
-    numStack[++top_NumStack] = val;
+    operandStack[++operandTop] = val;
+    return SUCCESS;
 }
 
-int popNum() {
-    if(top_NumStack < 0) {
-        printf("NumStack is underflow");
-        exit(1);
+int popOperand(int *val) {
+    if (operandTop < 0) {
+        fprintf(stderr, "Error: Operand stack underflow.\n");
+        return ERROR;
     }
 
-    return numStack[top_NumStack--];
-} 
-
+    *val = operandStack[operandTop--];
+    return SUCCESS;
+}
 
 // Stack to store operators
-char opStack[MAX];
-int top_opStack = -1;
+char operatorStack[MAX_SIZE];
+int operatorTop = -1;
 
-void pushOp(int op) {
-    if(top_opStack >= MAX) {
-        printf("Operator stack overflow.");
-        exit(1);
+int pushOperator(char operator) {
+    if (operatorTop >= MAX_SIZE-1) {
+        fprintf(stderr, "Error: Operator stack overflow.\n");
+        return ERROR;
     }
 
-    opStack[++top_opStack] = op;
+    operatorStack[++operatorTop] = operator;
+    return SUCCESS;
 }
 
-char popOp() {
-    if(top_opStack < 0) {
-        printf("Operator stack underflow");
-        exit(1);
+int popOperator(char *operator) {
+    if (operatorTop < 0) {
+        fprintf(stderr, "Error: Operator stack underflow.\n");
+        return ERROR;
     }
 
-    return opStack[top_opStack--];
+    *operator = operatorStack[operatorTop--];
+    return SUCCESS;
 }
 
-char peekOp() {
-    if(top_opStack < 0) {
-        printf("Operator stack is empty");
-        return 0;
+int peekOperator(char *operator) {
+    if (operatorTop < 0) {
+        fprintf(stderr, "Error: Operator stack is empty.\n");
+        return ERROR;
     }
 
-    return opStack[top_opStack];    
+    *operator = operatorStack[operatorTop];
+    return SUCCESS; 
 }
 
-int precedence(char op) {
-    if(op == '+' || op == '-') {
+int getPrecedence(char operator) {
+    if (operator == '+' || operator == '-') {
         return 1;
     }
 
-    if(op == '*' || op == '/') {
+    if (operator == '*' || operator == '/') {
         return 2;
     }
 
     return 0;
 }
 
-int calculate(int num1, int num2, char op) {
-    if(op == '+') {
-        return num1 + num2;
-    }
-    else if(op == '-') {
-        return num1 - num2;
-    }
-    else if(op == '*') {
-        return num1 * num2;
-    }
-    else {
-        if(num2 == 0) {
-            printf("Error: Division by zero.\n");
-            exit(1);
+int calculate(int operand1, int operand2, char operator, int *result) {
+    if (operator == '+') {
+        *result = operand1 + operand2;
+    } else if (operator == '-') {
+        *result = operand1 - operand2;
+    } else if (operator == '*') {
+        *result = operand1 * operand2;
+    } else if(operator == '/') {
+        if (operand2 == 0) {
+            fprintf(stderr, "Error: Division by zero.\n");
+            return ERROR;
         }
-        return num1 / num2;
+        *result = operand1 / operand2;
+    } else {
+        fprintf(stderr, "Error: Unknown operator '%c'.\n", operator);
+        return ERROR;
     }
 
-    return 0;
+    return SUCCESS;
 }
 
-int solve(char expression[1000]) {
-    int i = 0;
+int evaluateExpression(char *expression, int *result) {
+    if (expression[0] == '\0') {
+        fprintf(stderr, "Error: Empty expression\n");
+        return ERROR;
+    }
 
-    while(expression[i] != '\0') {
-        if(isspace(expression[i])) {
-            i++;
+    // Reset stack
+    operandTop = -1;
+    operatorTop = -1;
+
+    int idx = 0;
+    int expectedChar = 1; // 1 -> expecting operand, 0-> expecting operator
+    int sign = 1;         // 1 -> positive sign(+), -1 -> negative sign(-)
+
+    while (expression[idx] != '\0') {
+        if (isspace((unsigned char)(expression[idx]))) {
+            idx++;
             continue;
         }
 
-        if(isdigit(expression[i])) {
+        if (expectedChar) {
+            // process consecutive unary
+            if (expression[idx] == '+' || expression[idx] == '-') {
+                sign = 1;
+                while (expression[idx] == '-' || expression[idx] == '+') {
+                    if (expression[idx] == '-') {
+                        sign = -sign;
+                    }
+
+                    idx++;
+                }
+            }
+            else if (!isdigit((unsigned char)(expression[idx]))) {
+                fprintf(stderr, "Error: Invalid expression. Expected a number but found '%c'\n", expression[idx]);
+                return ERROR;
+            }
+        }
+
+        if (isdigit((unsigned char)(expression[idx]))) {
             int val = 0;
-            while(isdigit(expression[i])) {
-                val = val * 10 + (expression[i] - '0');
-                i++;
+            while (isdigit((unsigned char)(expression[idx]))) {
+                val = val * 10 + (expression[idx] - '0');
+                idx++;
             }
 
-            pushNum(val);
+            if(pushOperand(sign * val)) {
+                return ERROR;
+            }
+
+            sign = 1;
+            expectedChar = 0; // expecting an operator
             continue;
         }
 
-        if(strchr("+-*/", expression[i])) {
-            while(top_opStack >= 0 && precedence(peekOp()) >= precedence(expression[i])) {
-                int num2 = popNum();
-                int num1 = popNum();
-                char op = popOp();
+        if (!expectedChar) { // expecting an operator
+            if (strchr("+-*/", expression[idx])) {
+                char topOp;
+                while (operatorTop >= 0 && peekOperator(&topOp) == SUCCESS && getPrecedence(topOp) >= getPrecedence(expression[idx])) {
+                    int operand2;
+                    int operand1;
+                    char operator;
+                    int res;
 
-                int res = calculate(num1, num2, op);
-                pushNum(res);
+                    if(popOperand(&operand2)) {
+                        return ERROR;
+                    }
+
+                    if(popOperand(&operand1)) {
+                        return ERROR;
+                    }
+
+                    if(popOperator(&operator)) {
+                        return ERROR;
+                    }
+
+                    if(calculate(operand1, operand2, operator, &res)) {
+                        return ERROR;
+                    }
+
+                    if(pushOperand(res)) {
+                        return ERROR;
+                    } 
+                }
+
+                if(pushOperator(expression[idx])) {
+                    return ERROR;
+                }
+
+                idx++;
+                expectedChar = 1; // expecting an operand
+            } else {
+                fprintf(stderr, "Error: Invalid expression. Expected operator but found '%c'\n", expression[idx]);
+                return ERROR;
             }
+        }
+    }
 
-            pushOp(expression[i]);
-        } else {
-            printf("Error: Invalid expression.\n");
-            exit(1);
+    while (operatorTop >= 0) {
+        int operand2;
+        int operand1;
+        char operator;
+        int res;
+
+        if(popOperand(&operand2)) {
+            return ERROR;
         }
 
-        i++;
+        if(popOperand(&operand1)) {
+            return ERROR;
+        }
+
+        if(popOperator(&operator)) {
+            return ERROR;
+        }
+
+        if(calculate(operand1, operand2, operator, &res)) {
+            return ERROR;
+        }
+
+        if(pushOperand(res)) {
+            return ERROR;
+        }
     }
 
-    while(top_opStack >= 0) {
-        int num2 = popNum();
-        int num1 = popNum();
-        char op = popOp();
-        int res = calculate(num1, num2, op);
-        pushNum(res);
+    if(popOperand(result)) {
+        return ERROR;
     }
 
-    return popNum();
+    return SUCCESS;
 }
 
 int main() {
-    char expression[1000];
+    char expression[MAX_SIZE];
 
     // Take the expression input
-    printf("Enter mathematical expression: ");
-    scanf("%[^\n]s", expression);
+    if(fgets(expression, MAX_SIZE, stdin) != NULL) {
+        size_t length = strlen(expression);
 
-    printf("%s\n", expression);
+        if(length > 0 && expression[length-1] == '\n') {
+            expression[length-1] = '\0';
+        }
+    } else {
+        fprintf(stderr, "Error reading input.\n");
+        return ERROR;
+    }
 
-    int res = solve(expression);
+    int result;
+    if(evaluateExpression(expression, &result)) {
+        return ERROR;
+    }
 
-    printf("Result: %d", res);
+    printf("%d", result);
 
     return 0;
 }
