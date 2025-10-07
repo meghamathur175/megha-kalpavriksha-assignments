@@ -2,7 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#define FILENAME "users.txt"
+#define FILENAME "user.txt"
 
 typedef struct
 {
