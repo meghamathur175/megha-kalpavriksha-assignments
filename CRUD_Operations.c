@@ -39,7 +39,7 @@ int main()
         if (scanf("%d", &choice) != 1)
         {
             // If non-numeric input, clear buffer
-            printf("Invalid choice! Try again.\n");
+            fprintf(stderr, "Invalid choice! Try again.\n");
             while (getchar() != '\n')
                 ;
             continue;
@@ -64,7 +64,7 @@ int main()
             loopCondition = 0;
             break;
         default:
-            printf("Invalid choice! Try again.\n");
+            fprintf(stderr, "Invalid choice! Try again.\n");
         }
     }
 
@@ -103,7 +103,7 @@ void createFile()
     FILE *file = fopen(FILENAME, "a+");
     if (!file)
     {
-        printf("Error creating file!\n");
+        fprintf(stderr, "Error creating file!\n");
         return;
     }
 
@@ -115,7 +115,7 @@ void addUser()
     FILE *file = fopen(FILENAME, "a+");
     if (!file)
     {
-        printf("Error opening file!\n");
+        fprintf(stderr, "Error opening file!\n");
         return;
     }
 
@@ -133,7 +133,7 @@ void addUser()
         printf("Enter ID: ");
         if (scanf("%d", &user.id) != 1)
         {
-            printf("Invalid input. Enter a numeric ID.\n");
+            fprintf(stderr, "Invalid input. Enter a numeric ID.\n");
             clearInputBuffer();
             validId = 0;
             continue;
@@ -160,7 +160,7 @@ void addUser()
 
         if (idExist)
         {
-            printf("Error: A user with id %d already exist, Please use a unique ID.\n", user.id);
+            fprintf(stderr, "Error: A user with id %d already exist, Please use a unique ID.\n", user.id);
             clearInputBuffer();
         }
     } while (idExist == 1 || validId == 0);
@@ -175,7 +175,7 @@ void addUser()
 
         if (strlen(user.name) == 0 || !isValidName(user.name))
         {
-            printf("Invalid name. Name must contain only letters and spaces.\n");
+            fprintf(stderr, "Invalid name. Name must contain only letters and spaces.\n");
         }
 
     } while (strlen(user.name) == 0 || !isValidName(user.name));
@@ -187,7 +187,7 @@ void addUser()
 
         if (scanf("%d", &user.age) != 1 || (user.age < 0 || user.age > 120))
         {
-            printf("Invalid input. Age must be between 0 and 120.\n");
+            fprintf(stderr, "Invalid input. Age must be between 0 and 120.\n");
             clearInputBuffer();
             validAge = 0;
         }
@@ -246,7 +246,7 @@ void updateUser()
 
     if (!file || !temp)
     {
-        printf("Error opening file!\n");
+        fprintf(stderr, "Error opening file!\n");
         return;
     }
 
@@ -272,7 +272,7 @@ void updateUser()
 
                     if (strlen(user.name) == 0)
                     {
-                        printf("Invalid name. Name cannot be empty.\n");
+                        fprintf(stderr, "Invalid name. Name cannot be empty.\n");
                     }
 
                 } while (strlen(user.name) == 0);
@@ -284,7 +284,7 @@ void updateUser()
 
                     if (scanf("%d", &user.age) != 1 || (user.age < 0 || user.age > 120))
                     {
-                        printf("Invalid input. Age must be between 0 and 120.\n");
+                        fprintf(stderr, "Invalid input. Age must be between 0 and 120.\n");
                         clearInputBuffer();
                         validAge = 0;
                     }
@@ -309,13 +309,13 @@ void updateUser()
 
     if (remove(FILENAME) != 0)
     {
-        printf("Error deleting file.\n");
+        fprintf(stderr, "Error deleting file.\n");
         return;
     }
 
     if (rename("temp.txt", FILENAME) != 0)
     {
-        printf("Error renaming file.\n");
+        fprintf(stderr, "Error renaming file.\n");
         return;
     }
 
@@ -335,7 +335,7 @@ void deleteUser()
     FILE *temp = fopen("temp.txt", "w");
     if (!file || !temp)
     {
-        printf("Error opening file!\n");
+        fprintf(stderr, "Error opening file!\n");
         return;
     }
 
@@ -374,7 +374,7 @@ void deleteUser()
 
     if (rename("temp.txt", FILENAME) != 0)
     {
-        printf("Error renaming file.\n");
+        fprintf(stderr, "Error renaming file.\n");
         return;
     }
 
