@@ -126,7 +126,8 @@ int evaluateExpression(char *expression, int *result)
 {
     int idx = 0;
 
-    while(expression[idx] == ' ') {
+    while (expression[idx] == ' ')
+    {
         idx++;
     }
 
@@ -310,8 +311,10 @@ int main()
 
     int readIdx = 0;
     int writeIdx = 0;
-    while(expression[readIdx] != '\0') {
-        if(!isspace((unsigned char)(expression[readIdx]))) {
+    while (expression[readIdx] != '\0')
+    {
+        if (!isspace((unsigned char)(expression[readIdx])))
+        {
             expression[writeIdx++] = expression[readIdx];
         }
 
