@@ -124,9 +124,15 @@ int calculate(int operand1, int operand2, char operator, int *result)
 
 int evaluateExpression(char *expression, int *result)
 {
-    if (expression[0] == '\0')
+    int idx = 0;
+
+    while(expression[idx] == ' ') {
+        idx++;
+    }
+
+    if (expression[idx] == '\0')
     {
-        fprintf(stderr, "Error: Empty expression\n");
+        fprintf(stderr, "Error: Empty expression.\n");
         return ERROR;
     }
 
@@ -134,7 +140,6 @@ int evaluateExpression(char *expression, int *result)
     operandTop = -1;
     operatorTop = -1;
 
-    int idx = 0;
     int expectedChar = 1; // 1 -> expecting operand, 0-> expecting operator
     int sign = 1;         // 1 -> positive sign(+), -1 -> negative sign(-)
 
@@ -309,7 +314,7 @@ int main()
         return ERROR;
     }
 
-    printf("%d \n", result);
+    printf("%d\n", result);
 
     return 0;
 }
