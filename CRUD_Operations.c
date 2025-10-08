@@ -3,28 +3,33 @@
 #include <string.h>
 
 #define FILENAME "user.txt"
+#define SUCCESS 1
+#define ERROR 0
 
-typedef struct
+typedef struct User
 {
     int id;
     char name[50];
     int age;
 } User;
 
-// Function prototypes
+int inputUserId();
+int isUserIdExist(int userId);
+int isValidName(char *name);
+void inputUserName(char *userName, int userNameSize);
+int inputUserAge();
 void createFile();
 void addUser();
 void displayUsers();
 void updateUser();
 void deleteUser();
 void clearInputBuffer();
-int isValidName(char *name);
 
 int main()
 {
     int choice;
     int loopCondition = 1;
-    createFile(); // ensure file exists
+    createFile();
 
     while (loopCondition)
     {
@@ -38,7 +43,6 @@ int main()
 
         if (scanf("%d", &choice) != 1)
         {
-            // If non-numeric input, clear buffer
             fprintf(stderr, "Invalid choice! Try again.\n");
             while (getchar() != '\n')
                 ;
@@ -77,15 +81,122 @@ void clearInputBuffer()
         ;
 }
 
+int inputUserId()
+{
+    int userId;
+
+    do
+    {
+        printf("Enter ID: ");
+        if (scanf("%d", &userId) != 1)
+        {
+            fprintf(stderr, "Invalid input. Enter a numeric ID.\n");
+            clearInputBuffer();
+            continue;
+        }
+
+        clearInputBuffer();
+
+        if (isUserIdExist(userId) == SUCCESS)
+        {
+            fprintf(stderr, "Error: A user with id %d already exist, Please enter a unique ID.\n", userId);
+            continue;
+        }
+
+        break;
+
+    } while (1);
+
+    return userId;
+}
+
+int isUserIdExist(int userId)
+{
+    User existingUser;
+    char line[100];
+    int isDuplicateId = 0;
+
+    FILE *file = fopen(FILENAME, "r");
+    if (!file)
+    {
+        fprintf(stderr, "Error opening file!\n");
+        return ERROR;
+    }
+
+    rewind(file);
+    while (fgets(line, sizeof(line), file))
+    {
+        if (sscanf(line, "%d,%49[^,],%d", &existingUser.id, existingUser.name, &existingUser.age) == 3)
+        {
+            if (userId == existingUser.id)
+            {
+                isDuplicateId = 1;
+                break;
+            }
+        }
+        else
+        {
+            printf("Warning: Skipping malformed line: %s\n", line);
+        }
+    }
+
+    fclose(file);
+
+    if (isDuplicateId)
+    {
+        return SUCCESS;
+    }
+
+    return ERROR;
+}
+
+void inputUserName(char *userName, int userNameSize)
+{
+    do
+    {
+        printf("Enter Name: ");
+        fgets(userName, userNameSize, stdin);
+        userName[strcspn(userName, "\n")] = '\0';
+
+        if (strlen(userName) == 0 || !isValidName(userName))
+        {
+            fprintf(stderr, "Invalid name. Name must contain only letters and spaces.\n");
+        }
+
+    } while (strlen(userName) == 0 || !isValidName(userName));
+}
+
+int inputUserAge()
+{
+    int userAge;
+    int isValidAge = 0;
+
+    do
+    {
+        printf("Enter Age: ");
+
+        if (scanf("%d", &userAge) != 1 || (userAge < 0 || userAge > 120))
+        {
+            fprintf(stderr, "Invalid input. Age must be between 0 and 120.\n");
+            clearInputBuffer();
+            isValidAge = 0;
+        }
+        else
+        {
+            isValidAge = 1;
+        }
+    } while (isValidAge != 1);
+
+    return userAge;
+}
+
 int isValidName(char *name)
 {
     int hasLetter = 0;
 
     for (int i = 0; name[i] != '\0'; i++)
     {
-        if ((!((name[i] >= 'A' && name[i] <= 'Z') ||
-               (name[i] >= 'a' && name[i] <= 'z') ||
-               name[i] == ' ')))
+        if ((!((name[i] >= 'A' && name[i] <= 'Z') || (name[i] >= 'a' && name[i] <= 'z') || name[i] == ' ')))
         {
             return 0;
         }
@@ -112,6 +223,7 @@ void createFile()
 
 void addUser()
 {
+    User user;
     FILE *file = fopen(FILENAME, "a+");
     if (!file)
     {
@@ -119,83 +231,11 @@ void addUser()
         return;
     }
 
-    User user;
-    int idExist = 0;
-    int validId = 0;
-    User existingUser;
-    char line[100];
-
-    do
-    {
-        idExist = 0;
-        validId = 0;
-
-        printf("Enter ID: ");
-        if (scanf("%d", &user.id) != 1)
-        {
-            fprintf(stderr, "Invalid input. Enter a numeric ID.\n");
-            clearInputBuffer();
-            validId = 0;
-            continue;
-        }
-
-        validId = 1;
-
-        rewind(file);
-        while (fgets(line, sizeof(line), file))
-        {
-            if (sscanf(line, "%d,%49[^,],%d", &existingUser.id, existingUser.name, &existingUser.age) == 3)
-            {
-                if (user.id == existingUser.id)
-                {
-                    idExist = 1;
-                    break;
-                }
-            }
-            else
-            {
-                printf("Warning: Skipping malformed line: %s\n", line);
-            }
-        }
-
-        if (idExist)
-        {
-            fprintf(stderr, "Error: A user with id %d already exist, Please use a unique ID.\n", user.id);
-            clearInputBuffer();
-        }
-    } while (idExist == 1 || validId == 0);
-
+    // Id input
+    user.id = inputUserId();
+    inputUserName(user.name, sizeof(user.name));
+    user.age = inputUserAge();
     clearInputBuffer();
-
-    do
-    {
-        printf("Enter Name: ");
-        fgets(user.name, sizeof(user.name), stdin);
-        user.name[strcspn(user.name, "\n")] = '\0';
-
-        if (strlen(user.name) == 0 || !isValidName(user.name))
-        {
-            fprintf(stderr, "Invalid name. Name must contain only letters and spaces.\n");
-        }
-
-    } while (strlen(user.name) == 0 || !isValidName(user.name));
-
-    int validAge = 0;
-    do
-    {
-        printf("Enter Age: ");
-
-        if (scanf("%d", &user.age) != 1 || (user.age < 0 || user.age > 120))
-        {
-            fprintf(stderr, "Invalid input. Age must be between 0 and 120.\n");
-            clearInputBuffer();
-            validAge = 0;
-        }
-        else
-        {
-            validAge = 1;
-        }
-    } while (validAge != 1);
 
     fprintf(file, "%d,%s,%d\n", user.id, user.name, user.age);
     fclose(file);
@@ -204,6 +244,10 @@ void addUser()
 
 void displayUsers()
 {
+    User user;
+    char line[100];
+    int hasData = 0;
+
     FILE *file = fopen(FILENAME, "r");
     if (!file)
     {
@@ -211,12 +255,8 @@ void displayUsers()
         return;
     }
 
-    User user;
-    char line[100];
-
     printf("\nID\tName\t\tAge\n");
     printf("----------------------------\n");
-    int hasData = 0;
 
     while (fgets(line, sizeof(line), file))
     {
@@ -241,6 +281,20 @@ void displayUsers()
 
 void updateUser()
 {
+    int id;
+    User user;
+    char line[100];
+
+    printf("Enter ID to update: ");
+    scanf("%d", &id);
+    clearInputBuffer();
+
+    if (!isUserIdExist(id))
+    {
+        printf("User not found.\n");
+        return;
+    }
+
     FILE *file = fopen(FILENAME, "r");
     FILE *temp = fopen("temp.txt", "w");
 
@@ -250,52 +304,16 @@ void updateUser()
         return;
     }
 
-    int id, found = 0;
-    printf("Enter ID to update: ");
-    scanf("%d", &id);
-
-    User user;
-    char line[100];
-
     while (fgets(line, sizeof(line), file))
     {
         if (sscanf(line, "%d,%49[^,],%d", &user.id, user.name, &user.age) == 3)
         {
             if (user.id == id)
             {
-                do
-                {
-                    printf("Enter new Name: ");
-                    clearInputBuffer();
-                    fgets(user.name, sizeof(user.name), stdin);
-                    user.name[strcspn(user.name, "\n")] = '\0';
-
-                    if (strlen(user.name) == 0)
-                    {
-                        fprintf(stderr, "Invalid name. Name cannot be empty.\n");
-                    }
-
-                } while (strlen(user.name) == 0);
-
-                int validAge = 0;
-                do
-                {
-                    printf("Enter new Age: ");
-
-                    if (scanf("%d", &user.age) != 1 || (user.age < 0 || user.age > 120))
-                    {
-                        fprintf(stderr, "Invalid input. Age must be between 0 and 120.\n");
-                        clearInputBuffer();
-                        validAge = 0;
-                    }
-                    else
-                    {
-                        validAge = 1;
-                    }
-                } while (validAge != 1);
-
-                found = 1;
+                inputUserName(user.name, sizeof(user.name));
+                user.age = inputUserAge();
             }
+
             fprintf(temp, "%d,%s,%d\n", user.id, user.name, user.age);
         }
         else
@@ -319,18 +337,16 @@ void updateUser()
         return;
     }
 
-    if (found)
-    {
-        printf("User updated successfully!\n");
-    }
-    else
-    {
-        printf("User with ID %d not found!\n", id);
-    }
+    printf("User updated successfully.\n");
 }
 
 void deleteUser()
 {
+    int id;
+    int found = 0;
+    User user;
+    char line[100];
+
     FILE *file = fopen(FILENAME, "r");
     FILE *temp = fopen("temp.txt", "w");
     if (!file || !temp)
@@ -339,12 +355,15 @@ void deleteUser()
         return;
     }
 
-    int id, found = 0;
     printf("Enter ID to delete: ");
     scanf("%d", &id);
+    clearInputBuffer();
 
-    User user;
-    char line[100];
+    if (!isUserIdExist(id))
+    {
+        printf("User not found.\n");
+        return;
+    }
 
     while (fgets(line, sizeof(line), file))
     {
@@ -353,7 +372,7 @@ void deleteUser()
             if (user.id == id)
             {
                 found = 1;
-                continue; // skip writing this user
+                continue;
             }
             fprintf(temp, "%d,%s,%d\n", user.id, user.name, user.age);
         }
