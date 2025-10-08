@@ -308,6 +308,18 @@ int main()
         return ERROR;
     }
 
+    int readIdx = 0;
+    int writeIdx = 0;
+    while(expression[readIdx] != '\0') {
+        if(!isspace((unsigned char)(expression[readIdx]))) {
+            expression[writeIdx++] = expression[readIdx];
+        }
+
+        readIdx++;
+    }
+
+    expression[writeIdx] = '\0';
+
     int result;
     if (evaluateExpression(expression, &result))
     {
