@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <string.h>
+#include <ctype.h>
 
 #define ERROR 0
 #define SUCCESS 1
@@ -8,15 +9,26 @@ typedef struct Student
 {
     int rollNumber;
     char name[50];
-    int sub1;
-    int sub2;
-    int sub3;
+    int subject1;
+    int subject2;
+    int subject3;
 } Student;
+
+int calcTotalMarks(Student student);
+float calcAverageMarks(int totalMarks);
+char calcGrade(float averageMarks);
+void calcPerformance(char grade);
+void printRollNumbers(Student *studentDetails, int totalStudents);
+void printStudentDetails(Student *studentDetails, int totalStudents);
+int isValidRollNumber(int rollNumber);
+int isRollNumberExist(int rollNumber, int studentIdx, Student *studentDetails);
+int isValidName(char *name);
+int isValidMarks(int marksOfsubject1, int marksOfsubject2, int marksOfsubject3);
 
 int calcTotalMarks(Student student)
 {
     int totalMarks = 0;
-    totalMarks += student.sub1 + student.sub2 + student.sub3;
+    totalMarks += student.subject1 + student.subject2 + student.subject3;
     return totalMarks;
 }
 
@@ -51,27 +63,34 @@ char calcGrade(float averageMarks)
 
 void calcPerformance(char grade)
 {
-    if (grade == 'A')
+    int starsToPrint = 0;
+    switch (grade)
     {
-        printf("*****\n");
-    }
-    else if (grade == 'B')
-    {
-        printf("****\n");
-    }
-    else if (grade == 'C')
-    {
-        printf("***\n");
-    }
-    else if (grade == 'D')
-    {
-        printf("**\n");
-    }
-    else
-    {
+    case 'A':
+        starsToPrint = 5;
+        break;
+    case 'B':
+        starsToPrint = 4;
+        break;
+    case 'C':
+        starsToPrint = 3;
+        break;
+    case 'D':
+        starsToPrint = 2;
+        break;
+    case 'F':
         printf("\n");
-        return;
+        break;
+    default:
+        printf("Invalid grade");
     }
+
+    for (int i = 0; i < starsToPrint; i++)
+    {
+        printf("*");
+    }
+
+    printf("\n");
 }
 
 void printRollNumbers(Student *studentDetails, int totalStudents)
@@ -82,7 +101,7 @@ void printRollNumbers(Student *studentDetails, int totalStudents)
     }
 
     printRollNumbers(studentDetails, totalStudents - 1);
-    printf("%d ", studentDetails[totalStudents-1].rollNumber);
+    printf("%d ", studentDetails[totalStudents - 1].rollNumber);
 }
 
 void printStudentDetails(Student *studentDetails, int totalStudents)
@@ -115,17 +134,22 @@ void printStudentDetails(Student *studentDetails, int totalStudents)
     }
 }
 
-int isRollNumberExist(int rollNumber, int studentIdx, Student *studentDetails, int totalStudents)
+int isRollNumberExist(int rollNumber, int studentIdx, Student *studentDetails)
 {
-    for (int i = 0; i < totalStudents; i++)
+    for (int i = 0; i < studentIdx; i++)
     {
-        if (i != studentIdx && rollNumber == studentDetails[i].rollNumber)
+        if (rollNumber == studentDetails[i].rollNumber)
         {
             return 1;
         }
     }
 
     return 0;
+}
+
+int isValidRollNumber(int rollNumber)
+{
+    return rollNumber > 0 ? SUCCESS : ERROR;
 }
 
 int isValidName(char *name)
@@ -141,9 +165,9 @@ int isValidName(char *name)
     return SUCCESS;
 }
 
-int isValidMarks(int marksOfSub1, int marksOfSub2, int marksOfSub3)
+int isValidMarks(int marksOfsubject1, int marksOfsubject2, int marksOfsubject3)
 {
-    if (((marksOfSub1 < 0 || marksOfSub1 > 100) || (marksOfSub2 < 0 || marksOfSub2 > 100) || (marksOfSub3 < 0 || marksOfSub3 > 100)))
+    if (((marksOfsubject1 < 0 || marksOfsubject1 > 100) || (marksOfsubject2 < 0 || marksOfsubject2 > 100) || (marksOfsubject3 < 0 || marksOfsubject3 > 100)))
     {
         return ERROR;
     }
@@ -169,19 +193,27 @@ int main()
     {
         char name[50];
         int rollNumber;
-        int marksOfSub1;
-        int marksOfSub2;
-        int marksOfSub3;
+        int marksOfsubject1;
+        int marksOfsubject2;
+        int marksOfsubject3;
         char line[100];
 
         fgets(line, sizeof(line), stdin);
-        sscanf(line, "%d %49[^0-9] %d %d %d", &rollNumber, name, &marksOfSub1, &marksOfSub2, &marksOfSub3);
+        sscanf(line, "%d %49[^0-9] %d %d %d", &rollNumber, name, &marksOfsubject1, &marksOfsubject2, &marksOfsubject3);
         name[strcspn(name, "\n")] = '\0';
 
-        if (isRollNumberExist(rollNumber, i, studentDetails, totalStudents) == 1)
+        if (isValidRollNumber(rollNumber))
         {
-            printf("Roll number already exist.\n");
-            return ERROR;
+            if (isRollNumberExist(rollNumber, i, studentDetails) == 1)
+            {
+                printf("Roll number already exist.\n");
+                return ERROR;
+            }
+        }
+        else
+        {
+            printf("Roll number must be a numeric value.\n");
+            return 0;
         }
 
         if (!isValidName(name))
@@ -190,7 +222,7 @@ int main()
             return ERROR;
         }
 
-        if (!isValidMarks(marksOfSub1, marksOfSub2, marksOfSub3))
+        if (!isValidMarks(marksOfsubject1, marksOfsubject2, marksOfsubject3))
         {
             printf("Marks must be between 0 to 100.\n");
             return ERROR;
@@ -198,16 +230,18 @@ int main()
 
         studentDetails[i].rollNumber = rollNumber;
         strcpy(studentDetails[i].name, name);
-        studentDetails[i].sub1 = marksOfSub1;
-        studentDetails[i].sub2 = marksOfSub2;
-        studentDetails[i].sub3 = marksOfSub3;
+        studentDetails[i].subject1 = marksOfsubject1;
+        studentDetails[i].subject2 = marksOfsubject2;
+        studentDetails[i].subject3 = marksOfsubject3;
     }
 
     printf("\n");
     printStudentDetails(studentDetails, totalStudents);
 
+    printf("\n");
     printf("List of Roll Numbers(via recursion): ");
     printRollNumbers(studentDetails, totalStudents);
+    printf("\n");
 
     return 0;
 }
