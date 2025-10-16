@@ -403,6 +403,6 @@ void deleteUser()
     }
     else
     {
-        printf("User with ID %d not found! \n", id);
+        printf("User with ID %d not found!\n", id);
     }
 }
