@@ -2,6 +2,8 @@
 #include <stdlib.h>
 #include <time.h>
 
+#define MIN_SONARIMAGE_SIZE 2
+#define MAX_SONARIMAGE_SIZE 10
 #define MIN_SONARIMAGE_VALUE 0
 #define MAX_SONARIMAGE_VALUE 255
 
@@ -18,9 +20,10 @@ int main()
     printf("Enter matrix size (2-10): ");
     scanf("%d", &sonarImageSize);
 
-    if (sonarImageSize < 2 || sonarImageSize > 10)
+    if (sonarImageSize < MIN_SONARIMAGE_SIZE || sonarImageSize > MAX_SONARIMAGE_SIZE)
     {
         printf("Invalid matrix size. Must be in range (2-10)");
+        return 0;
     }
 
     int sonarImage[sonarImageSize][sonarImageSize];
@@ -61,11 +64,11 @@ void generateRandomMatrix(int *sonarImage, int sonarImageSize)
 {
     srand(time(0));
 
-    for (int row = 0; row < sonarImageSize; row++)
+    for (int rowIndex = 0; rowIndex < sonarImageSize; rowIndex++)
     {
-        for (int column = 0; column < sonarImageSize; column++)
+        for (int columnIndex = 0; columnIndex < sonarImageSize; columnIndex++)
         {
-            *(sonarImage + row * sonarImageSize + column) = (rand() % (MAX_SONARIMAGE_VALUE - MIN_SONARIMAGE_VALUE + 1)) + MIN_SONARIMAGE_VALUE;
+            *(sonarImage + rowIndex * sonarImageSize + columnIndex) = (rand() % (MAX_SONARIMAGE_VALUE - MIN_SONARIMAGE_VALUE + 1)) + MIN_SONARIMAGE_VALUE;
         }
     }
 
@@ -74,14 +77,11 @@ void generateRandomMatrix(int *sonarImage, int sonarImageSize)
 
 void generateTransposeMatrix(int *sonarImage, int sonarImageSize)
 {
-    for (int row = 0; row < sonarImageSize; row++)
+    for (int rowIndex = 0; rowIndex < sonarImageSize; rowIndex++)
     {
-        for (int column = row + 1; column < sonarImageSize; column++)
+        for (int columnIndex = rowIndex + 1; columnIndex < sonarImageSize; columnIndex++)
         {
-            if (row != column)
-            {
-                swapValues((sonarImage + row * sonarImageSize + column), (sonarImage + column * sonarImageSize + row));
-            }
+            swapValues((sonarImage + rowIndex * sonarImageSize + columnIndex), (sonarImage + columnIndex * sonarImageSize + rowIndex));
         }
     }
 }
@@ -92,17 +92,14 @@ void generateRotatedMatrix(int *sonarImage, int sonarImageSize)
     int *endColumn;
     generateTransposeMatrix((int *)(sonarImage), sonarImageSize);
 
-    for (int row = 0; row < sonarImageSize; row++)
+    for (int rowIndex = 0; rowIndex < sonarImageSize; rowIndex++)
     {
-        startColumn = sonarImage + row * sonarImageSize;
-        endColumn = sonarImage + row * sonarImageSize + (sonarImageSize - 1);
+        startColumn = sonarImage + rowIndex * sonarImageSize;
+        endColumn = sonarImage + rowIndex * sonarImageSize + (sonarImageSize - 1);
 
         while (startColumn < endColumn)
         {
-            int temporaryStore = *startColumn;
-            *startColumn = *endColumn;
-            *endColumn = temporaryStore;
-
+            swapValues(startColumn, endColumn);
             startColumn++;
             endColumn--;
         }
@@ -113,8 +110,8 @@ void generateRotatedMatrix(int *sonarImage, int sonarImageSize)
 
 void applySmoothingFilter(int *sonarImage, int sonarImageSize)
 {
-    int originalPreviousRow[10];
-    int originalCurrentRow[10];
+    int originalPreviousRow[sonarImageSize];
+    int originalCurrentRow[sonarImageSize];
     int *originalPreviousRowPointer = originalPreviousRow;
     int *originalCurrentRowPointer = originalCurrentRow;
 
@@ -139,6 +136,7 @@ void applySmoothingFilter(int *sonarImage, int sonarImageSize)
                 }
                 sumOfElements += *(originalPreviousRowPointer + columnIndex);
                 totalElements++;
+
                 if (columnIndex < sonarImageSize - 1)
                 {
                     sumOfElements += *(originalPreviousRowPointer + columnIndex + 1);
@@ -162,17 +160,19 @@ void applySmoothingFilter(int *sonarImage, int sonarImageSize)
 
             if (rowIndex < sonarImageSize - 1)
             {
-                int *nextRowPtr = sonarImage + (rowIndex + 1) * sonarImageSize;
+                int *nextRowPointer = sonarImage + (rowIndex + 1) * sonarImageSize;
+
                 if (columnIndex > 0)
                 {
-                    sumOfElements += *(nextRowPtr + columnIndex - 1);
+                    sumOfElements += *(nextRowPointer + columnIndex - 1);
                     totalElements++;
                 }
-                sumOfElements += *(nextRowPtr + columnIndex);
+                sumOfElements += *(nextRowPointer + columnIndex);
                 totalElements++;
+
                 if (columnIndex < sonarImageSize - 1)
                 {
-                    sumOfElements += *(nextRowPtr + columnIndex + 1);
+                    sumOfElements += *(nextRowPointer + columnIndex + 1);
                     totalElements++;
                 }
             }
