@@ -7,11 +7,11 @@
 #define MIN_SONARIMAGE_VALUE 0
 #define MAX_SONARIMAGE_VALUE 255
 
-void generateRandomMatrix(int *sonarImage, int sonarImageSize);
 void printSonarImageMatrix(int *sonarImage, int sonarImageSize);
-void generateRotatedMatrix(int *sonarImage, int sonarImageSize);
-void generateTransposeMatrix(int *sonarImage, int sonarImageSize);
-void swapValues(int *value1, int *value2);
+void initializeWithRandomValues(int *sonarImage, int sonarImageSize);
+void rotateSonarImageClockwise(int *sonarImage, int sonarImageSize);
+void transposeMatrix(int *sonarImage, int sonarImageSize);
+void swapElements(int *firstElement, int *secondElement);
 void applySmoothingFilter(int *sonarImage, int sonarImageSize);
 
 int main()
@@ -29,13 +29,16 @@ int main()
     int sonarImage[sonarImageSize][sonarImageSize];
 
     printf("Original Randomly Generated Matrix: \n");
-    generateRandomMatrix((int *)sonarImage, sonarImageSize);
+    initializeWithRandomValues((int *)sonarImage, sonarImageSize);
+    printSonarImageMatrix((int *)(sonarImage), sonarImageSize);
 
-    printf("\nMatrix after 90 degree Clockwise Rotation: \n");
-    generateRotatedMatrix((int *)sonarImage, sonarImageSize);
+    printf("Matrix after 90 degree Clockwise Rotation: \n");
+    rotateSonarImageClockwise((int *)sonarImage, sonarImageSize);
+    printSonarImageMatrix((int *)(sonarImage), sonarImageSize);
 
-    printf("\nMatrix after Applying 3X3 Smoothing Filter:  \n");
+    printf("Matrix after Applying 3X3 Smoothing Filter:  \n");
     applySmoothingFilter((int *)(sonarImage), sonarImageSize);
+    printSonarImageMatrix((int *)(sonarImage), sonarImageSize);
 
     return 0;
 }
@@ -46,21 +49,23 @@ void printSonarImageMatrix(int *sonarImage, int sonarImageSize)
     {
         for (int columnIndex = 0; columnIndex < sonarImageSize; columnIndex++)
         {
-            printf("%d ", *(sonarImage + rowIndex * sonarImageSize + columnIndex));
+            printf("%3d ", *(sonarImage + rowIndex * sonarImageSize + columnIndex));
         }
 
         printf("\n");
     }
+
+    printf("\n");
 }
 
-void swapValues(int *valueFirst, int *valueSecond)
+void swapElements(int *firstElement, int *secondElement)
 {
-    int temporaryStore = *valueFirst;
-    *valueFirst = *valueSecond;
-    *valueSecond = temporaryStore;
+    int temporaryStore = *firstElement;
+    *firstElement = *secondElement;
+    *secondElement = temporaryStore;
 }
 
-void generateRandomMatrix(int *sonarImage, int sonarImageSize)
+void initializeWithRandomValues(int *sonarImage, int sonarImageSize)
 {
     srand(time(0));
 
@@ -71,26 +76,24 @@ void generateRandomMatrix(int *sonarImage, int sonarImageSize)
             *(sonarImage + rowIndex * sonarImageSize + columnIndex) = (rand() % (MAX_SONARIMAGE_VALUE - MIN_SONARIMAGE_VALUE + 1)) + MIN_SONARIMAGE_VALUE;
         }
     }
-
-    printSonarImageMatrix((int *)(sonarImage), sonarImageSize);
 }
 
-void generateTransposeMatrix(int *sonarImage, int sonarImageSize)
+void transposeMatrix(int *sonarImage, int sonarImageSize)
 {
     for (int rowIndex = 0; rowIndex < sonarImageSize; rowIndex++)
     {
         for (int columnIndex = rowIndex + 1; columnIndex < sonarImageSize; columnIndex++)
         {
-            swapValues((sonarImage + rowIndex * sonarImageSize + columnIndex), (sonarImage + columnIndex * sonarImageSize + rowIndex));
+            swapElements((sonarImage + rowIndex * sonarImageSize + columnIndex), (sonarImage + columnIndex * sonarImageSize + rowIndex));
         }
     }
 }
 
-void generateRotatedMatrix(int *sonarImage, int sonarImageSize)
+void rotateSonarImageClockwise(int *sonarImage, int sonarImageSize)
 {
     int *startColumn;
     int *endColumn;
-    generateTransposeMatrix((int *)(sonarImage), sonarImageSize);
+    transposeMatrix((int *)(sonarImage), sonarImageSize);
 
     for (int rowIndex = 0; rowIndex < sonarImageSize; rowIndex++)
     {
@@ -99,13 +102,11 @@ void generateRotatedMatrix(int *sonarImage, int sonarImageSize)
 
         while (startColumn < endColumn)
         {
-            swapValues(startColumn, endColumn);
+            swapElements(startColumn, endColumn);
             startColumn++;
             endColumn--;
         }
     }
-
-    printSonarImageMatrix((int *)(sonarImage), sonarImageSize);
 }
 
 void applySmoothingFilter(int *sonarImage, int sonarImageSize)
@@ -185,6 +186,4 @@ void applySmoothingFilter(int *sonarImage, int sonarImageSize)
             *(originalPreviousRowPointer + columnIndex) = *(originalCurrentRowPointer + columnIndex);
         }
     }
-
-    printSonarImageMatrix((int *)(sonarImage), sonarImageSize);
 }
