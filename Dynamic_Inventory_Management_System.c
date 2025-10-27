@@ -34,6 +34,7 @@ int isDuplicateId(Product *products, int productId, int numberOfProducts);
 int isValidName(char *productName);
 int isValidPrice(char *productPriceString, float *productPrice);
 int isValidQuantity(char *productQuantityString, int *productQuantity);
+int checkProductInventory(int *totalNumberOfProducts);
 void addNewProduct(Product **products, int *totalNumberOfProducts);
 void viewAllProducts(Product **products, int *totalNumberOfProducts);
 void updateQuantity(Product **products, int *totalNumberOfProducts);
@@ -80,7 +81,7 @@ void showInventoryMenu(Product **products, int *totalNumberOfProducts)
         printf("Enter your choice: ");
         if (scanf("%d", &userChoice) != 1)
         {
-            printf("Invalid choice. Must be a numeric value in range (1-8).");
+            printf("Invalid choice. Must be a numeric value in range (1-8).\n");
             clearInputBuffer();
             continue;
         }
@@ -113,7 +114,7 @@ void showInventoryMenu(Product **products, int *totalNumberOfProducts)
         case 8:
             free(*products);
             *products = NULL;
-            printf("Memory released successfully. Exiting program... ");
+            printf("Memory released successfully. Exiting program... \n");
             isLoopCondition = 0;
             break;
         default:
@@ -159,7 +160,7 @@ int takeUserInput(Product **products, int *totalNumberOfProducts)
         {
             return ERROR;
         }
-        if (isDuplicateId(*products, productId, *totalNumberOfProducts))
+        if (isDuplicateId(*products, productId, currentProductIndex))
         {
             return ERROR;
         }
@@ -270,7 +271,7 @@ int isValidName(char *productName)
 {
     char *productnamePointer = productName;
 
-    if (*productnamePointer == ' ')
+    while (*productnamePointer == ' ')
     {
         productnamePointer++;
     }
@@ -320,6 +321,7 @@ int isValidPrice(char *productPriceString, float *productPrice)
                 if (decimalCount > 1)
                 {
                     printf("Invalid product price. Must be a numeric value in range (1-100000).\n");
+                    return ERROR;
                 }
             }
         }
@@ -351,6 +353,17 @@ int isValidQuantity(char *productQuantityString, int *productQuantity)
     if (*productQuantity < MIN_PRODUCT_Quantity || *productQuantity > MAX_PRODUCT_Quantity)
     {
         printf("Invalid Product quantity. Must be in range(1-1000000).\n");
+        return ERROR;
+    }
+
+    return SUCCESS;
+}
+
+int checkProductInventory(int *totalNumberOfProducts)
+{
+    if (*totalNumberOfProducts == 0)
+    {
+        printf("No products in inventory.\n");
         return ERROR;
     }
 
@@ -428,9 +441,8 @@ void addNewProduct(Product **products, int *totalNumberOfProducts)
 
 void viewAllProducts(Product **products, int *totalNumberOfProducts)
 {
-    if (*totalNumberOfProducts == 0)
+    if (checkProductInventory(totalNumberOfProducts))
     {
-        printf("No products in inventory.\n");
         return;
     }
 
@@ -453,9 +465,8 @@ void updateQuantity(Product **products, int *totalNumberOfProducts)
     int newProductQuantity;
     int isProductFound = 0;
 
-    if (*totalNumberOfProducts == 0)
+    if (checkProductInventory(totalNumberOfProducts))
     {
-        printf("No products in inventory.\n");
         return;
     }
 
@@ -498,9 +509,8 @@ void searchProductById(Product **products, int *totalNumberOfProducts)
     int productIdToBeSearched;
     int isProductFound = 0;
 
-    if (*totalNumberOfProducts == 0)
+    if (checkProductInventory(totalNumberOfProducts))
     {
-        printf("No products in inventory.\n");
         return;
     }
 
@@ -547,9 +557,8 @@ void searchProductByName(Product **products, int *totalNumberOfProducts)
     char *searchProductNamePointer = productNameToBeSearched;
     int isProductFound = 0;
 
-    if (*totalNumberOfProducts == 0)
+    if (checkProductInventory(totalNumberOfProducts))
     {
-        printf("No products in inventory.\n");
         return;
     }
 
@@ -618,9 +627,8 @@ void searchProductByPriceRange(Product **products, int *totalNumberOfProducts)
     float minimumProductPrice;
     int isProductFound = 0;
 
-    if (*totalNumberOfProducts == 0)
+    if (checkProductInventory(totalNumberOfProducts))
     {
-        printf("No products in inventory.\n");
         return;
     }
 
@@ -655,7 +663,7 @@ void searchProductByPriceRange(Product **products, int *totalNumberOfProducts)
 
     if (!isProductFound)
     {
-        printf("Error: No product found in price range (%f-%f)! \n", minimumProductPrice, maximumProductPrice);
+        printf("Error: No product found in price range (%.2f-%.2f)! \n", minimumProductPrice, maximumProductPrice);
     }
 }
 
@@ -665,9 +673,8 @@ void deleteProduct(Product **products, int *totalNumberOfProducts)
     char deleteProductIdString[PRODUCT_ID_LENGTH];
     int isProductFound = 0;
 
-    if (*totalNumberOfProducts == 0)
+    if (checkProductInventory(totalNumberOfProducts))
     {
-        printf("No products in inventory.\n");
         return;
     }
 
@@ -705,6 +712,13 @@ void deleteProduct(Product **products, int *totalNumberOfProducts)
         (*totalNumberOfProducts)--;
         Product *newHeapMemoryPointer;
         newHeapMemoryPointer = (Product *)realloc(*products, *totalNumberOfProducts * sizeof(Product));
+
+        if (*totalNumberOfProducts == 0)
+        {
+            free(*products);
+            *products = NULL;
+            return;
+        }
 
         if (newHeapMemoryPointer != NULL)
         {
