@@ -6,6 +6,10 @@
 #define BLOCK_SIZE 512
 #define MAX_BLOCKS 1024
 #define PRINT_WORKING_DIRECTORY_STACK_SIZE 50
+#define COMMAND_SIZE 100
+#define ARGUMENT_SIZE 100
+#define DATA_SIZE 100
+#define INPUT_LINE_SIZE 100
 #define SUCCESS 1
 #define ERROR 0
 
@@ -40,7 +44,7 @@ void initializeRootDirectory();
 void initializeVirtualDisk();
 void insertFileNodeIncurrentWorkingDirectory(FileNode *newNode);
 void makeDirectory(char *directoryName);
-void listCommand();
+void listDirectoryContents();
 void changeDirectory(char *directoryName);
 void printWorkingDirectory();
 void createFile(char *fileName);
@@ -63,10 +67,10 @@ int validateNameArgument(char *name, char *command);
 
 int main()
 {
-    char inputLine[1024];
-    char command[100];
-    char argument[100];
-    char data[1024];
+    char inputLine[INPUT_LINE_SIZE];
+    char command[COMMAND_SIZE];
+    char argument[ARGUMENT_SIZE];
+    char data[DATA_SIZE];
 
     initializeFreeBlocks();
     initializeRootDirectory();
@@ -91,7 +95,7 @@ int main()
             continue;
         }
 
-        inputLine[strcspn(inputLine, "\n")] = '\0';
+        inputLine[strcspn(inputLine, "\r\n")] = '\0';
 
         if (strlen(inputLine) == 0)
         {
@@ -145,7 +149,7 @@ int main()
         }
         else if (strcmp(command, "ls") == 0)
         {
-            listCommand();
+            listDirectoryContents();
         }
         else if (strcmp(command, "create") == 0)
         {
@@ -268,6 +272,7 @@ void replaceNewLineCharacter(char *data)
             buffer[bufferIndex++] = data[dataIndex++];
         }
     }
+
     buffer[bufferIndex] = '\0';
     strcpy(data, buffer);
 }
@@ -430,7 +435,7 @@ void makeDirectory(char *directoryName)
     printf("Directory '%s' created successfully.\n", directoryName);
 }
 
-void listCommand()
+void listDirectoryContents()
 {
     FileNode *currentChild = currentWorkingDirectory->child;
 
@@ -450,6 +455,7 @@ void listCommand()
         {
             printf("%s \n", currentChild->name);
         }
+
         currentChild = currentChild->next;
     } while (currentChild != currentWorkingDirectory->child);
 }
@@ -830,7 +836,7 @@ void deleteFile(char *fileName)
     }
 
     free(file);
-    printf("File deleted successfully.\n");
+    printf("File deleted successfully. \n");
 }
 
 void removeDirectory(char *directoryName)
@@ -839,7 +845,7 @@ void removeDirectory(char *directoryName)
 
     if (directory == NULL)
     {
-        printf("Directory not found.\n", directoryName);
+        printf("Directory not found. \n", directoryName);
         return;
     }
 
@@ -871,7 +877,7 @@ void removeDirectory(char *directoryName)
     }
 
     free(directory);
-    printf("Directory removed successfully.\n");
+    printf("Directory removed successfully. \n");
 }
 
 void displayDiskUsage()
