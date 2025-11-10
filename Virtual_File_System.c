@@ -42,7 +42,7 @@ FileNode *currentWorkingDirectory = NULL;
 void initializeFreeBlocks();
 void initializeRootDirectory();
 void initializeVirtualDisk();
-void insertFileNodeIncurrentWorkingDirectory(FileNode *newNode);
+void insertFileNodeInCurrentWorkingDirectory(FileNode *newNode);
 void makeDirectory(char *directoryName);
 void listDirectoryContents();
 void changeDirectory(char *directoryName);
@@ -371,7 +371,7 @@ void initializeVirtualDisk()
     }
 }
 
-void insertFileNodeIncurrentWorkingDirectory(FileNode *newNode)
+void insertFileNodeInCurrentWorkingDirectory(FileNode *newNode)
 {
     if (currentWorkingDirectory->child == NULL)
     {
@@ -430,7 +430,7 @@ void makeDirectory(char *directoryName)
     newDirectory->numberOfBlocksUsed = 0;
     newDirectory->blockPointers = NULL;
 
-    insertFileNodeIncurrentWorkingDirectory(newDirectory);
+    insertFileNodeInCurrentWorkingDirectory(newDirectory);
 
     printf("Directory '%s' created successfully.\n", directoryName);
 }
@@ -475,7 +475,7 @@ void changeDirectory(char *directoryName)
 
             if (currentWorkingDirectory == rootDirectory)
             {
-                printf("Moved to /\n", currentWorkingDirectory->name);
+                printf("Moved to /\n");
             }
             else
             {
@@ -575,7 +575,7 @@ void createFile(char *fileName)
     newFile->numberOfBlocksUsed = 0;
     newFile->blockPointers = NULL;
 
-    insertFileNodeIncurrentWorkingDirectory(newFile);
+    insertFileNodeInCurrentWorkingDirectory(newFile);
 
     printf("File '%s' is created successfully. \n", fileName);
 }
@@ -646,12 +646,11 @@ void writeFile(char *fileName, char *data)
     FileNode *file = searchChild(fileName);
     int dataSize = strlen(data);
     int requiredBlocks = (dataSize + BLOCK_SIZE - 1) / BLOCK_SIZE;
-    int allocatedBlockCount = 0;
     int currentDataPosition = 0;
 
     if (file == NULL)
     {
-        printf("File not found. \n", fileName);
+        printf("File not found. \n");
         return;
     }
 
@@ -661,14 +660,26 @@ void writeFile(char *fileName, char *data)
         return;
     }
 
-    freeFileBlocks(file);
-
     if (requiredBlocks == 0)
     {
         freeFileBlocks(file);
         file->sizeOfContent = 0;
+        file->blockPointers = NULL;
+        file->numberOfBlocksUsed = 0;
         printf("File '%s' have 0 bytes. \n", fileName);
         return;
+    }
+
+    int oldAllocatedBlocks = file->numberOfBlocksUsed;
+    int extraBlocksNeeded = 0;
+
+    if (requiredBlocks > oldAllocatedBlocks)
+    {
+        extraBlocksNeeded = requiredBlocks - oldAllocatedBlocks;
+    }
+    else
+    {
+        extraBlocksNeeded = 0;
     }
 
     int *newBlockIndexes = calloc(requiredBlocks, sizeof(int));
@@ -679,47 +690,73 @@ void writeFile(char *fileName, char *data)
         return;
     }
 
-    FreeBlock **allocatedBlocks = calloc(requiredBlocks, sizeof(FreeBlock *));
-
-    for (int currentBlock = 0; currentBlock < requiredBlocks; currentBlock++)
+    for (int oldBlockIndex = 0; oldBlockIndex < oldAllocatedBlocks && oldBlockIndex < requiredBlocks; oldBlockIndex++)
     {
-        FreeBlock *newBlock = allocateFreeBlock();
-
-        if (newBlock == NULL)
-        {
-            break;
-        }
-
-        allocatedBlocks[currentBlock] = newBlock;
-        newBlockIndexes[currentBlock] = newBlock->index;
-        allocatedBlockCount++;
+        newBlockIndexes[oldBlockIndex] = file->blockPointers[oldBlockIndex];
     }
 
-    if (allocatedBlockCount < requiredBlocks)
+    FreeBlock **temporaryAllocatedBlocks = NULL;
+
+    if (extraBlocksNeeded > 0)
     {
-        for (int currentBlock = 0; currentBlock < allocatedBlockCount; currentBlock++)
+        temporaryAllocatedBlocks = calloc(extraBlocksNeeded, sizeof(FreeBlock *));
+
+        if (temporaryAllocatedBlocks == NULL)
         {
-            FreeBlock *block = allocatedBlocks[currentBlock];
-            block->next = NULL;
-            block->previous = freeBlockTail;
-
-            if (freeBlockTail)
-            {
-                freeBlockTail->next = block;
-            }
-            else
-            {
-                freeBlockHead = block;
-            }
-
-            freeBlockTail = block;
+            printf("Memory allocation failed. \n");
+            return;
         }
 
-        free(newBlockIndexes);
-        free(allocatedBlocks);
-        printf("Not enough space available. Write failed. \n");
-        return;
+        int extraAllocatedBlocksCount = 0;
+
+        for (int currentBlock = oldAllocatedBlocks; currentBlock < requiredBlocks; currentBlock++)
+        {
+            FreeBlock *newBlock = allocateFreeBlock();
+
+            if (newBlock == NULL)
+            {
+                break;
+            }
+
+            temporaryAllocatedBlocks[extraAllocatedBlocksCount] = newBlock;
+            newBlockIndexes[currentBlock] = newBlock->index;
+            extraAllocatedBlocksCount++;
+
+            if (extraAllocatedBlocksCount == extraBlocksNeeded)
+            {
+                break;
+            }
+        }
+
+        if (extraAllocatedBlocksCount != extraBlocksNeeded)
+        {
+            for (int currentBlock = 0; currentBlock < extraAllocatedBlocksCount; currentBlock++)
+            {
+                FreeBlock *block = temporaryAllocatedBlocks[currentBlock];
+                block->next = NULL;
+                block->previous = freeBlockTail;
+
+                if (freeBlockTail)
+                {
+                    freeBlockTail->next = block;
+                }
+                else
+                {
+                    freeBlockHead = block;
+                }
+
+                freeBlockTail = block;
+            }
+
+            free(temporaryAllocatedBlocks);
+            free(newBlockIndexes);
+
+            printf("Not enough space, write operation failed. Old data is safe. \n");
+            return;
+        }
     }
+
+    freeFileBlocks(file);
 
     for (int currentBlock = 0; currentBlock < requiredBlocks; currentBlock++)
     {
@@ -740,10 +777,15 @@ void writeFile(char *fileName, char *data)
         currentDataPosition += dataBytesToWrite;
     }
 
+    if (file->blockPointers != NULL)
+    {
+        free(file->blockPointers);
+    }
+
     file->blockPointers = newBlockIndexes;
     file->numberOfBlocksUsed = requiredBlocks;
     file->sizeOfContent = dataSize;
-    free(allocatedBlocks);
+    free(temporaryAllocatedBlocks);
 
     printf("Data written successfully (Size=%d bytes)\n", dataSize);
 }
@@ -754,7 +796,7 @@ void readFile(char *fileName)
 
     if (file == NULL)
     {
-        printf("File not found. \n", fileName);
+        printf("File not found. \n");
         return;
     }
 
@@ -845,7 +887,7 @@ void removeDirectory(char *directoryName)
 
     if (directory == NULL)
     {
-        printf("Directory not found. \n", directoryName);
+        printf("Directory not found. \n");
         return;
     }
 
@@ -953,6 +995,7 @@ void exitFileSystem()
 {
     freeAllFileNodes(rootDirectory);
     freeAllFreeBlocks();
+    free(rootDirectory);
 
     printf("Memory released. Exiting program...");
 }
