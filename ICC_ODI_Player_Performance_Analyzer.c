@@ -37,9 +37,9 @@ typedef struct TeamModel
     int teamId;
     char teamName[MAX_NAME_LENGTH];
     int totalPlayers;
+    float averageBattingStrikeRate;
     int totalBatsmen;
     int totalAllRounders;
-    float averageBattingStrikeRate;
     float totalStrikeRate;
     PlayerModel *batsmenHead;
     PlayerModel *bowlersHead;
@@ -53,7 +53,7 @@ void addPlayerToTeam(PlayerModel *newPlayer);
 int findTeamIndex(char *teamName);
 void insertPlayersSortedByPerformanceIndex(PlayerModel **currentListHead, PlayerModel *newPlayer);
 void initializePlayers();
-bool validateChoice(char inputChoice[MAX_CHOICE_LENGTH]);
+bool inputAndValidateChoice(int *choice);
 float computePerformanceIndexOfPlayer(PlayerModel *newPlayer);
 void displayPlayersOfSpecificTeam();
 void swapTeams(TeamModel *firstTeam, TeamModel *secondTeam2);
@@ -80,7 +80,6 @@ int main()
 
     while (1)
     {
-        char inputChoice[MAX_CHOICE_LENGTH];
         int choice;
 
         printf("\n==============================================================================\n");
@@ -95,13 +94,10 @@ int main()
 
         printf("==============================================================================\n");
         printf("Enter your choice: ");
-        scanf("%s", inputChoice);
-        if (validateChoice(inputChoice) == false)
+        if (inputAndValidateChoice(&choice) == false)
         {
-            return 0;
+            continue;
         }
-
-        choice = atoi(inputChoice);
 
         switch (choice)
         {
@@ -121,19 +117,24 @@ int main()
             exitMenu();
             return 0;
         default:
-            printf("Not a valid choice. \n");
+            printf("Not a valid choice. Must be an integer value in range (1-5). \n");
+            cleanInputBuffer();
         }
     }
 }
 
-bool validateChoice(char inputChoice[MAX_CHOICE_LENGTH])
+bool inputAndValidateChoice(int *choice)
 {
-    int currentIndex = 0;
+    char inputChoice[MAX_CHOICE_LENGTH];
 
-    while (inputChoice[currentIndex] == ' ')
+    if (scanf("%s", inputChoice) != 1)
     {
-        currentIndex++;
+        printf("Choice must be an integer value in range (1-5). \n");
+        cleanInputBuffer();
+        return false;
     }
+
+    int currentIndex = 0;
 
     if (inputChoice[currentIndex] == '\0')
     {
@@ -146,9 +147,12 @@ bool validateChoice(char inputChoice[MAX_CHOICE_LENGTH])
         if (!isdigit((unsigned char)(inputChoice[index])))
         {
             printf("Choice must be an integer value in range (1-5). \n");
+            cleanInputBuffer();
             return false;
         }
     }
+
+    *choice = atoi(inputChoice);
 
     return true;
 }
