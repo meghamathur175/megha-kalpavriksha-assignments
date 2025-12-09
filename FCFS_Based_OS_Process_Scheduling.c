@@ -35,6 +35,9 @@ typedef struct PCBNode
     int completionTime;
     struct PCBNode *next;
     State state;
+    int executionTime;
+    int inputOutputJustStartedFlag;
+    bool isKilled;
 } PCBNode;
 
 typedef struct QueueNode
@@ -82,6 +85,8 @@ void processKillEvent(int currentTime, Queue *ready, Queue *waiting, Queue *term
 void handleInputOutputTime(Queue *waiting, Queue *ready);
 void handleSchedulingOfProcesses(Queue *readyQueue, Queue *waitingQueue, Queue *terminatedQueue);
 void printFinalReport(Queue *terminated);
+void freeQueueNodes(Queue *queue);
+void freeMemory(Queue *readyQueue, Queue *waitingQueue, Queue *terminatedQueue);
 
 int main()
 {
@@ -110,6 +115,7 @@ int main()
     handleSchedulingOfProcesses(&readyQueue, &waitingQueue, &terminatedQueue);
     printFinalReport(&terminatedQueue);
 
+    freeMemory(&readyQueue, &waitingQueue, &terminatedQueue);
     return 0;
 }
 
@@ -132,6 +138,7 @@ void takeTotalProcessesInput(int totalProcesses, Queue *readyQueue)
     {
         char inputLine[MAX_INPUT_LENGTH];
         fgets(inputLine, sizeof(inputLine), stdin);
+        inputLine[strcspn(inputLine, "\n")] = '\0';
 
         if (validateInputLine(inputLine) == false)
         {
@@ -205,6 +212,7 @@ void takeTotalKillEventsInput(int totalKillEvents)
     {
         char inputLine[MAX_INPUT_LENGTH];
         fgets(inputLine, sizeof(inputLine), stdin);
+        inputLine[strcspn(inputLine, "\n")] = '\0';
 
         if (validateInputLine(inputLine) == false)
         {
@@ -216,11 +224,11 @@ void takeTotalKillEventsInput(int totalKillEvents)
         char inputedTime[MAX_INTEGER_LENGTH];
         int time;
 
-        int totalInputValuesCount = sscanf(inputLine, "kill %s %s", inputedProcessId, inputedTime);
+        int totalInputValuesCount = sscanf(inputLine, "KILL %s %s", inputedProcessId, inputedTime);
 
         if (totalInputValuesCount != 2)
         {
-            printf("Invalid input. Kill event format must be: kill <PID> <kill_time> \n");
+            printf("Invalid input. Kill event format must be: KILL <PID> <kill_time> \n");
             continue;
         }
 
@@ -488,7 +496,9 @@ PCBNode *createPCB(char *processName, int processId, int burstTime, int inputOut
     newPCB->currentInputOutputTime = 0;
     newPCB->completionTime = 0;
     newPCB->next = NULL;
-
+    newPCB->executionTime = 0;
+    newPCB->inputOutputJustStartedFlag = 0;
+    newPCB->isKilled = false;
     return newPCB;
 }
 
@@ -506,19 +516,22 @@ void addKillEvent(int processId, int time)
     newNode->KillTime = time;
     newNode->next = NULL;
 
-    if (KILLHead == NULL)
+    if (KILLHead == NULL || KILLHead->KillTime > time)
     {
+        newNode->next = KILLHead;
         KILLHead = newNode;
+        return;
     }
     else
     {
         KILLNode *currentNode = KILLHead;
 
-        while (currentNode->next != NULL)
+        while (currentNode->next != NULL && currentNode->next->KillTime <= time)
         {
             currentNode = currentNode->next;
         }
 
+        newNode->next = currentNode->next;
         currentNode->next = newNode;
     }
 }
@@ -534,15 +547,16 @@ void processKillEvent(int currentTime, Queue *ready, Queue *waiting, Queue *term
         {
             PCBNode *pcb = hashmapGet(currentKillNode->processId);
 
-            if (pcb != NULL)
+            if (pcb != NULL && pcb->isKilled == false && pcb->state != TERMINATED)
             {
                 pcb->state = KILLED;
+                pcb->isKilled = true;
                 pcb->completionTime = currentTime;
 
                 removeFromQueue(ready, pcb->processId);
                 removeFromQueue(waiting, pcb->processId);
 
-                if (*running != NULL && (*running)->processId == currentKillNode->processId)
+                if (*running != NULL && (*running)->processId == pcb->processId)
                 {
                     *running = NULL;
                 }
@@ -550,19 +564,20 @@ void processKillEvent(int currentTime, Queue *ready, Queue *waiting, Queue *term
                 enqueue(terminated, pcb);
             }
 
+            KILLNode *nodeToBeDeleted = currentKillNode;
+
             if (previousKillNode == NULL)
             {
                 KILLHead = KILLHead->next;
-                free(currentKillNode);
                 currentKillNode = KILLHead;
             }
             else
             {
                 previousKillNode->next = currentKillNode->next;
-                free(currentKillNode);
                 currentKillNode = previousKillNode->next;
             }
 
+            free(nodeToBeDeleted);
             continue;
         }
 
@@ -579,14 +594,27 @@ void handleInputOutputTime(Queue *waitingQueue, Queue *readyQueue)
     while (currentNode != NULL)
     {
         PCBNode *pcb = currentNode->pcb;
+        QueueNode *nextNode = currentNode->next;
 
-        pcb->currentInputOutputTime++;
-        pcb->remainingInputOutputTime--;
-
-        if (pcb->remainingInputOutputTime <= 0)
+        if (pcb->inputOutputJustStartedFlag)
         {
-            pcb->state = READY;
-            enqueue(readyQueue, pcb);
+            pcb->inputOutputJustStartedFlag = 0;
+        }
+        else
+        {
+            if (pcb->remainingInputOutputTime > 0)
+            {
+                pcb->remainingInputOutputTime--;
+            }
+        }
+
+        if (pcb->remainingInputOutputTime == 0)
+        {
+            if (pcb->isKilled == false)
+            {
+                pcb->state = READY;
+                enqueue(readyQueue, pcb);
+            }
 
             if (previousNode == NULL)
             {
@@ -602,11 +630,9 @@ void handleInputOutputTime(Queue *waitingQueue, Queue *readyQueue)
                 waitingQueue->rear = previousNode;
             }
 
-            QueueNode *nodeToBeDeleted = currentNode;
-            currentNode = currentNode->next;
-            free(nodeToBeDeleted);
+            free(currentNode);
             waitingQueue->sizeOfQueue--;
-
+            currentNode = nextNode;
             continue;
         }
 
@@ -626,13 +652,22 @@ void handleSchedulingOfProcesses(Queue *readyQueue, Queue *waitingQueue, Queue *
 
         if (runningProcess == NULL && readyQueue->sizeOfQueue > 0)
         {
-            runningProcess = dequeue(readyQueue);
-            runningProcess->state = RUNNING;
+            PCBNode *currentNode = dequeue(readyQueue);
+
+            if (currentNode != NULL && !currentNode->isKilled)
+            {
+                runningProcess = currentNode;
+            }
+            else if (currentNode != NULL)
+            {
+                enqueue(terminatedQueue, currentNode);
+            }
         }
 
         if (runningProcess != NULL)
         {
             runningProcess->currentBurstTime++;
+            runningProcess->executionTime++;
             runningProcess->remainingBurstTime--;
 
             if (runningProcess->currentBurstTime == runningProcess->inputOutputStartTime && runningProcess->inputOutputDurationTime > 0)
@@ -640,6 +675,7 @@ void handleSchedulingOfProcesses(Queue *readyQueue, Queue *waitingQueue, Queue *
                 runningProcess->state = WAITING;
                 runningProcess->remainingInputOutputTime = runningProcess->inputOutputDurationTime;
                 runningProcess->currentInputOutputTime = 0;
+                runningProcess->inputOutputJustStartedFlag = 1;
 
                 enqueue(waitingQueue, runningProcess);
                 runningProcess = NULL;
@@ -661,25 +697,39 @@ void handleSchedulingOfProcesses(Queue *readyQueue, Queue *waitingQueue, Queue *
 
 void printFinalReport(Queue *terminatedQueue)
 {
-    PCBNode *pcbNodesList[MAX_PCB_NODES];
-    int totalPcbNodes = 0;
-    QueueNode *currentTerminatedNode = terminatedQueue->front;
+    QueueNode *currentNode = terminatedQueue->front;
+    int totalTerminatedPCBs = 0;
 
-    while (currentTerminatedNode != NULL)
+    while (currentNode != NULL)
     {
-        pcbNodesList[totalPcbNodes++] = currentTerminatedNode->pcb;
-        currentTerminatedNode = currentTerminatedNode->next;
+        totalTerminatedPCBs++;
+        currentNode = currentNode->next;
     }
 
-    for (int turn = 0; turn < totalPcbNodes - 1; turn++)
+    if (totalTerminatedPCBs == 0)
     {
-        for (int index = turn + 1; index < totalPcbNodes; index++)
+        return;
+    }
+
+    PCBNode *allTerminatedPCBs[totalTerminatedPCBs];
+    currentNode = terminatedQueue->front;
+    int index = 0;
+
+    while (currentNode != NULL)
+    {
+        allTerminatedPCBs[index++] = currentNode->pcb;
+        currentNode = currentNode->next;
+    }
+
+    for (int turn = 0; turn < totalTerminatedPCBs - 1; turn++)
+    {
+        for (int index = 0; index < totalTerminatedPCBs - turn - 1; index++)
         {
-            if (pcbNodesList[turn]->processId > pcbNodesList[index]->processId)
+            if (allTerminatedPCBs[index]->processId > allTerminatedPCBs[index + 1]->processId)
             {
-                PCBNode *temporaryNode = pcbNodesList[turn];
-                pcbNodesList[turn] = pcbNodesList[index];
-                pcbNodesList[index] = temporaryNode;
+                PCBNode *temporaryStore = allTerminatedPCBs[index];
+                allTerminatedPCBs[index] = allTerminatedPCBs[index + 1];
+                allTerminatedPCBs[index + 1] = temporaryStore;
             }
         }
     }
@@ -687,33 +737,33 @@ void printFinalReport(Queue *terminatedQueue)
     printf("\n%-5s %-10s %-5s %-5s %-15s %-12s %-8s\n",
            "PID", "Name", "CPU", "IO", "Status", "Turnaround", "Waiting");
 
-    int currentIndex = 0;
-    PCBNode *currentNode = pcbNodesList[currentIndex];
+    int currentTerminatedPCBIndex = 0;
 
-    while (currentIndex < totalPcbNodes)
+    while (currentTerminatedPCBIndex < totalTerminatedPCBs)
     {
-        int cpuTime = currentNode->burstTime;
-        int inputOutputTime = currentNode->inputOutputDurationTime;
+        PCBNode *pcb = allTerminatedPCBs[currentTerminatedPCBIndex];
+        int cpuTime = pcb->burstTime;
+        int inputOutputTime = pcb->inputOutputDurationTime;
 
-        if (currentNode->state == KILLED)
+        if (pcb->state == KILLED)
         {
             printf("%-5d %-10s %-5d %-5d KILLED at %-7d %-12s %-8s\n",
-                   currentNode->processId,
-                   currentNode->processName,
+                   pcb->processId,
+                   pcb->processName,
                    cpuTime,
                    inputOutputTime,
-                   currentNode->completionTime,
+                   pcb->completionTime,
                    "-",
                    "-");
         }
         else
         {
-            int turnaroundTime = currentNode->completionTime - currentNode->arrivalTime;
+            int turnaroundTime = pcb->completionTime - pcb->arrivalTime;
             int waitingTime = turnaroundTime - cpuTime;
 
             printf("%-5d %-10s %-5d %-5d OK%-12s %-12d %-8d\n",
-                   currentNode->processId,
-                   currentNode->processName,
+                   pcb->processId,
+                   pcb->processName,
                    cpuTime,
                    inputOutputTime,
                    "",
@@ -721,7 +771,54 @@ void printFinalReport(Queue *terminatedQueue)
                    waitingTime);
         }
 
-        currentIndex++;
-        currentNode = pcbNodesList[currentIndex];
+        currentTerminatedPCBIndex++;
     }
+}
+
+void freeQueueNodes(Queue *queue)
+{
+    QueueNode *currentNode = queue->front;
+
+    while (currentNode != NULL)
+    {
+        QueueNode *nextNode = currentNode->next;
+        free(currentNode);
+        currentNode = nextNode;
+    }
+
+    queue->front = NULL;
+    queue->rear = NULL;
+    queue->sizeOfQueue = 0;
+}
+
+void freeMemory(Queue *readyQueue, Queue *waitingQueue, Queue *terminatedQueue)
+{
+    for (int currentIndex = 0; currentIndex < MAX_HASHMAP_SIZE; currentIndex++)
+    {
+        PCBNode *currentPCB = hashmap[currentIndex];
+
+        while (currentPCB != NULL)
+        {
+            PCBNode *nextPCB = currentPCB->next;
+            free(currentPCB);
+            currentPCB = nextPCB;
+        }
+
+        hashmap[currentIndex] = NULL;
+    }
+
+    KILLNode *currentKillNode = KILLHead;
+
+    while (currentKillNode != NULL)
+    {
+        KILLNode *nextKillNode = currentKillNode->next;
+        free(currentKillNode);
+        currentKillNode = nextKillNode;
+    }
+
+    KILLHead = NULL;
+
+    freeQueueNodes(readyQueue);
+    freeQueueNodes(waitingQueue);
+    freeQueueNodes(terminatedQueue);
 }
