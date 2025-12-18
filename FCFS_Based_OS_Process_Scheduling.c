@@ -18,7 +18,7 @@ typedef enum
     READY,
     RUNNING,
     WAITING,
-    TERMINATED,
+    COMPLETED,
     KILLED
 } State;
 
@@ -55,12 +55,12 @@ typedef struct Queue
     int sizeOfQueue;
 } Queue;
 
-typedef struct KILLNode
+typedef struct KillNode
 {
     int processId;
     int KillTime;
-    struct KILLNode *next;
-} KILLNode;
+    struct KillNode *next;
+} KillNode;
 
 typedef struct ProcessInput
 {
@@ -79,7 +79,7 @@ typedef struct SystemQueues
 } SystemQueues;
 
 PCBNode *hashmap[MAX_HASHMAP_SIZE];
-KILLNode *KILLHead = NULL;
+KillNode *KillHead = NULL;
 
 void initializeQueue(Queue *queue);
 void initializeHashmap();
@@ -88,22 +88,33 @@ PCBNode *dequeue(Queue *queue);
 int hashFunction(int processId);
 void hashmapPut(PCBNode *pcb);
 PCBNode *hashmapGet(int processId);
-PCBNode *createPCB(char *processName, int processId, int burstTime, int inputOutputStartTime, int inputOutputDurationTime);
+void initializePCB(PCBNode *pcb, const ProcessInput *input);
+PCBNode *createPCB(const ProcessInput *input);
 int removeFromQueue(Queue *queue, int processId);
 void trimWhitespaces(char *inputLine);
+void handleProcessInput(const ProcessInput *input, Queue *readyQueue);
+void handleKillEventInput(int pid, int time);
+void printProcessValidationError(const ProcessInput *input);
+bool validateProcessInput(const ProcessInput *input);
+bool parseProcessCommand(const char *inputLine, ProcessInput *inputProcessDetails);
+bool parseKillCommand(const char *inputLine, int *processId, int *time);
+bool isKillCommand(const char *inputLine);
+bool readInputLine(char *inputLine);
 void takeUserInput(Queue *readyQueue);
 void addKillEvent(int processId, int time);
-bool validateProcessInputValues(ProcessInput processInputatedValues);
-bool isValidProcessName(char processName[MAX_NAME_LENGTH]);
-bool isValidProcessId(char inputedProcessId[MAX_INTEGER_LENGTH]);
-bool isValidInteger(char integerValue[MAX_INTEGER_LENGTH]);
-bool isValidBurstTime(char inputedtBurstTime[MAX_INTEGER_LENGTH]);
-bool isValidInputOutputStartTime(char *inputedInputOutputStartTime);
-bool isValidInputOutputDuration(char *inputedInputOutputDuration);
-bool validateKillEventInputValues(char inputedProcessId[MAX_INTEGER_LENGTH], char inputedTime[MAX_INTEGER_LENGTH]);
-bool isDash(char *inputValue);
+bool isValidProcessName(const char *processName);
+bool isValidProcessId(const char *inputedProcessId);
+bool isValidInteger(const char *integerValue);
+bool isValidBurstTime(const char *inputedtBurstTime);
+bool isValidInputOutputStartTime(const char *inputedInputOutputStartTime);
+bool isValidInputOutputDuration(const char *inputedInputOutputDuration);
+bool isDash(const char *inputValue);
 void processKillEvent(int currentTime, SystemQueues *systemQueues, PCBNode **running);
 void handleInputOutputTime(Queue *waiting, Queue *ready);
+void checkProcessStateTransition(SystemQueues *queues, PCBNode **running, int currentTime);
+void executeCPU(PCBNode *running);
+void dispatchProcess(SystemQueues *queues, PCBNode **running);
+bool systemHasActiveProcesses(SystemQueues *queues, PCBNode *running);
 void handleSchedulingOfProcesses(SystemQueues *systemQueues);
 void sortPCBBasedOnProcessId(PCBNode **allTerminatedPCBs, int totalTerminatedPCBs);
 bool hasKillEvent(PCBNode **allTerminatedPCBs, int totalTerminatedPCBs);
@@ -163,30 +174,111 @@ void trimWhitespaces(char *inputLine)
     }
 }
 
+bool readInputLine(char *inputLine)
+{
+    if (fgets(inputLine, MAX_INPUT_LENGTH, stdin) == NULL)
+    {
+        return false;
+    }
+
+    inputLine[strcspn(inputLine, "\n")] = '\0';
+    return true;
+}
+
+bool isKillCommand(const char *inputLine)
+{
+    if (strncmp(inputLine, "KILL ", 5) == 0)
+    {
+        return true;
+    }
+
+    return false;
+}
+
+bool parseKillCommand(const char *inputLine, int *processId, int *time)
+{
+    if (sscanf(inputLine, "KILL %d %d", processId, time) == 2)
+    {
+        return true;
+    }
+
+    return false;
+}
+
+bool parseProcessCommand(const char *inputLine, ProcessInput *inputProcessDetails)
+{
+    if (sscanf(inputLine, "%s %s %s %s %s",
+               inputProcessDetails->processName,
+               inputProcessDetails->processId,
+               inputProcessDetails->burstTime,
+               inputProcessDetails->inputOutputStartTime,
+               inputProcessDetails->inputOutputDuration) == 5)
+    {
+        return true;
+    }
+
+    return false;
+}
+
+bool validateProcessInput(const ProcessInput *input)
+{
+    if (isValidProcessName(input->processName) && isValidProcessId(input->processId) && isValidBurstTime(input->burstTime) &&
+        isValidInputOutputStartTime(input->inputOutputStartTime) && isValidInputOutputDuration(input->inputOutputDuration))
+    {
+        return true;
+    }
+
+    return false;
+}
+
+void printProcessValidationError(const ProcessInput *input)
+{
+    if (isValidProcessName(input->processName) == false)
+    {
+        printf("Process name can't be empty.\n");
+    }
+    else if (isValidProcessId(input->processId) == false)
+    {
+        printf("Invalid input. Process ID must be an integer.\n");
+    }
+    else if (isValidBurstTime(input->burstTime) == false)
+    {
+        printf("Invalid input. Burst time must be an integer.\n");
+    }
+    else if (isValidInputOutputStartTime(input->inputOutputStartTime) == false)
+    {
+        printf("Invalid input. I/O start time must be integer or '-'.\n");
+    }
+    else if (isValidInputOutputDuration(input->inputOutputDuration) == false)
+    {
+        printf("Invalid input. I/O duration must be integer or '-'.\n");
+    }
+}
+
+void handleKillEventInput(int pid, int time)
+{
+    addKillEvent(pid, time);
+}
+
+void handleProcessInput(const ProcessInput *input, Queue *readyQueue)
+{
+    PCBNode *pcb = createPCB(input);
+
+    if (pcb == NULL)
+    {
+        return;
+    }
+
+    enqueue(readyQueue, pcb);
+    hashmapPut(pcb);
+}
+
 void takeUserInput(Queue *readyQueue)
 {
-    char processName[MAX_NAME_LENGTH];
-    char inputedProcessId[MAX_INTEGER_LENGTH];
-    int processId;
-    char inputedtBurstTime[MAX_INTEGER_LENGTH];
-    int burstTime;
-    char inputedInputOutputStartTime[MAX_INTEGER_LENGTH];
-    int inputOutputStartTime;
-    char inputedInputOutputDuration[MAX_INTEGER_LENGTH];
-    int inputOutputDuration;
-    char inputedTime[MAX_INTEGER_LENGTH];
-    int time;
+    char inputLine[MAX_INPUT_LENGTH];
 
-    while (1)
+    while (readInputLine(inputLine))
     {
-        char inputLine[MAX_INPUT_LENGTH];
-
-        if (fgets(inputLine, sizeof(inputLine), stdin) == NULL)
-        {
-            break;
-        }
-
-        inputLine[strcspn(inputLine, "\n")] = '\0';
         trimWhitespaces(inputLine);
 
         if (strlen(inputLine) == 0)
@@ -194,78 +286,43 @@ void takeUserInput(Queue *readyQueue)
             break;
         }
 
-        if (sscanf(inputLine, "KILL %s %s", inputedProcessId, inputedTime) == COUNT_OF_KILL_EVENT_INPUT_VALUES)
+        if (isKillCommand(inputLine))
         {
-            if (validateKillEventInputValues(inputedProcessId, inputedTime) == false)
+            int processId;
+            int time;
+
+            if (parseKillCommand(inputLine, &processId, &time) == false)
             {
+                printf("Invalid KILL command format. Format is: KILL <PID> <kill_time>\n");
                 continue;
             }
 
-            processId = atoi(inputedProcessId);
-            time = atoi(inputedTime);
-
-            addKillEvent(processId, time);
+            handleKillEventInput(processId, time);
+            continue;
         }
-        else if (sscanf(inputLine, "%s %s %s %s %s", processName, inputedProcessId, inputedtBurstTime, inputedInputOutputStartTime, inputedInputOutputDuration) == COUNT_OF_PROCESS_INPUT_VALUES)
-        {
-            ProcessInput inputedProcessValues;
 
-            strcpy(inputedProcessValues.processId, inputedProcessId);
-            strcpy(inputedProcessValues.processName, processName);
-            strcpy(inputedProcessValues.burstTime, inputedtBurstTime);
-            strcpy(inputedProcessValues.inputOutputStartTime, inputedInputOutputStartTime);
-            strcpy(inputedProcessValues.inputOutputDuration, inputedInputOutputDuration);
+        ProcessInput inputProcessDetails;
 
-            if (validateProcessInputValues(inputedProcessValues) == false)
-            {
-                continue;
-            }
-
-            processId = atoi(inputedProcessId);
-            burstTime = atoi(inputedtBurstTime);
-
-            if (strcmp(inputedInputOutputStartTime, "-") == 0)
-            {
-                inputOutputStartTime = -1;
-            }
-            else
-            {
-                inputOutputStartTime = atoi(inputedInputOutputStartTime);
-            }
-
-            if (strcmp(inputedInputOutputDuration, "-") == 0)
-            {
-                inputOutputDuration = 0;
-            }
-            else
-            {
-                inputOutputDuration = atoi(inputedInputOutputDuration);
-            }
-
-            PCBNode *newPcb = createPCB(processName, processId, burstTime, inputOutputStartTime, inputOutputDuration);
-
-            if (newPcb == NULL)
-            {
-                return;
-            }
-
-            newPcb->state = READY;
-            newPcb->remainingBurstTime = burstTime;
-            hashmapPut(newPcb);
-            enqueue(readyQueue, newPcb);
-        }
-        else
+        if (parseProcessCommand(inputLine, &inputProcessDetails) == false)
         {
             printf("Invalid input.\n");
             printf("Process input format must be: <process_name> <pid> <burst_time> <io_start_time> <io_duration> \n");
             printf("Kill event format must be: KILL <PID> <kill_time> \n");
-
+            
             continue;
         }
+
+        if (validateProcessInput(&inputProcessDetails) == false)
+        {
+            printProcessValidationError(&inputProcessDetails);
+            continue;
+        }
+
+        handleProcessInput(&inputProcessDetails, readyQueue);
     }
 }
 
-bool isDash(char *inputValue)
+bool isDash(const char *inputValue)
 {
     if (strcmp(inputValue, "-") == 0)
     {
@@ -275,7 +332,7 @@ bool isDash(char *inputValue)
     return false;
 }
 
-bool isValidProcessName(char processName[MAX_NAME_LENGTH])
+bool isValidProcessName(const char *processName)
 {
     int currentNameIndex = 0;
 
@@ -286,27 +343,30 @@ bool isValidProcessName(char processName[MAX_NAME_LENGTH])
 
     if (processName[currentNameIndex] == '\0')
     {
-        printf("Process name can't be empty. \n");
         return false;
     }
 
     return true;
 }
 
-bool isValidProcessId(char inputedProcessId[MAX_INTEGER_LENGTH])
+bool isValidProcessId(const char *inputedProcessId)
 {
     if (isValidInteger(inputedProcessId) == false)
     {
-        printf("Invalid input. Process id must be an integer value. \n");
         return false;
     }
 
     return true;
 }
 
-bool isValidInteger(char integerValue[MAX_INTEGER_LENGTH])
+bool isValidInteger(const char *integerValue)
 {
     int currentIntegerIndex = 0;
+
+    if (integerValue[0] == '\0')
+    {
+        return false;
+    }
 
     while (integerValue[currentIntegerIndex] != '\0')
     {
@@ -321,13 +381,12 @@ bool isValidInteger(char integerValue[MAX_INTEGER_LENGTH])
     return true;
 }
 
-bool isValidInputOutputStartTime(char *inputedInputOutputStartTime)
+bool isValidInputOutputStartTime(const char *inputedInputOutputStartTime)
 {
     if (isValidInteger(inputedInputOutputStartTime) == false)
     {
         if (isDash(inputedInputOutputStartTime) == false)
         {
-            printf("Invalid input. I/O start time must be an integer or '-'\n");
             return false;
         }
     }
@@ -335,13 +394,12 @@ bool isValidInputOutputStartTime(char *inputedInputOutputStartTime)
     return true;
 }
 
-bool isValidInputOutputDuration(char *inputedInputOutputDuration)
+bool isValidInputOutputDuration(const char *inputedInputOutputDuration)
 {
     if (isValidInteger(inputedInputOutputDuration) == false)
     {
         if (isDash(inputedInputOutputDuration) == false)
         {
-            printf("Invalid input. I/O duration time must be integer or '-'\n");
             return false;
         }
     }
@@ -349,55 +407,9 @@ bool isValidInputOutputDuration(char *inputedInputOutputDuration)
     return true;
 }
 
-bool isValidBurstTime(char inputedtBurstTime[MAX_INTEGER_LENGTH])
+bool isValidBurstTime(const char *inputedtBurstTime)
 {
     if (isValidInteger(inputedtBurstTime) == false)
-    {
-        printf("Invalid input. Burst must be an integer value. \n");
-        return false;
-    }
-
-    return true;
-}
-
-bool validateProcessInputValues(ProcessInput inputedProcessValues)
-{
-    if (isValidProcessName(inputedProcessValues.processName) == false)
-    {
-        return false;
-    }
-
-    if (isValidProcessId(inputedProcessValues.processId) == false)
-    {
-        return false;
-    }
-
-    if (isValidBurstTime(inputedProcessValues.burstTime) == false)
-    {
-        return false;
-    }
-
-    if (isValidInputOutputStartTime(inputedProcessValues.inputOutputStartTime) == false)
-    {
-        return false;
-    }
-
-    if (isValidInputOutputDuration(inputedProcessValues.inputOutputDuration) == false)
-    {
-        return false;
-    }
-
-    return true;
-}
-
-bool validateKillEventInputValues(char inputedProcessId[MAX_INTEGER_LENGTH], char inputedTime[MAX_INTEGER_LENGTH])
-{
-    if (isValidProcessId(inputedProcessId) == false)
-    {
-        return false;
-    }
-
-    if (isValidInteger(inputedTime) == false)
     {
         return false;
     }
@@ -540,7 +552,27 @@ PCBNode *hashmapGet(int processId)
     return NULL;
 }
 
-PCBNode *createPCB(char *processName, int processId, int burstTime, int inputOutputStartTime, int inputOutputDurationTime)
+void initializePCB(PCBNode *pcb, const ProcessInput *input)
+{
+    pcb->state = READY;
+    pcb->processId = atoi(input->processId);
+    strcpy(pcb->processName, input->processName);
+    pcb->arrivalTime = 0;
+    pcb->burstTime = atoi(input->burstTime);
+    pcb->remainingBurstTime = pcb->burstTime;
+    pcb->currentBurstTime = 0;
+    pcb->inputOutputStartTime = isDash(input->inputOutputStartTime) ? -1 : atoi(input->inputOutputStartTime);
+    pcb->inputOutputDurationTime = isDash(input->inputOutputDuration) ? 0 : atoi(input->inputOutputDuration);
+    pcb->remainingInputOutputTime = 0;
+    pcb->currentInputOutputTime = 0;
+    pcb->completionTime = 0;
+    pcb->executionTime = 0;
+    pcb->inputOutputJustStartedFlag = 0;
+    pcb->isKilled = false;
+    pcb->next = NULL;
+}
+
+PCBNode *createPCB(const ProcessInput *input)
 {
     PCBNode *newPCB = malloc(sizeof(PCBNode));
 
@@ -550,27 +582,14 @@ PCBNode *createPCB(char *processName, int processId, int burstTime, int inputOut
         return NULL;
     }
 
-    newPCB->processId = processId;
-    strcpy(newPCB->processName, processName);
-    newPCB->arrivalTime = 0;
-    newPCB->burstTime = burstTime;
-    newPCB->currentBurstTime = 0;
-    newPCB->remainingBurstTime = burstTime;
-    newPCB->inputOutputStartTime = inputOutputStartTime;
-    newPCB->inputOutputDurationTime = inputOutputDurationTime;
-    newPCB->remainingInputOutputTime = 0;
-    newPCB->currentInputOutputTime = 0;
-    newPCB->completionTime = 0;
-    newPCB->next = NULL;
-    newPCB->executionTime = 0;
-    newPCB->inputOutputJustStartedFlag = 0;
-    newPCB->isKilled = false;
+    initializePCB(newPCB, input);
+
     return newPCB;
 }
 
 void addKillEvent(int processId, int time)
 {
-    KILLNode *newNode = malloc(sizeof(KILLNode));
+    KillNode *newNode = malloc(sizeof(KillNode));
 
     if (newNode == NULL)
     {
@@ -582,15 +601,15 @@ void addKillEvent(int processId, int time)
     newNode->KillTime = time;
     newNode->next = NULL;
 
-    if (KILLHead == NULL || KILLHead->KillTime > time)
+    if (KillHead == NULL || KillHead->KillTime > time)
     {
-        newNode->next = KILLHead;
-        KILLHead = newNode;
+        newNode->next = KillHead;
+        KillHead = newNode;
         return;
     }
     else
     {
-        KILLNode *currentNode = KILLHead;
+        KillNode *currentNode = KillHead;
 
         while (currentNode->next != NULL && currentNode->next->KillTime <= time)
         {
@@ -604,8 +623,8 @@ void addKillEvent(int processId, int time)
 
 void processKillEvent(int currentTime, SystemQueues *systemQueues, PCBNode **running)
 {
-    KILLNode *currentKillNode = KILLHead;
-    KILLNode *previousKillNode = NULL;
+    KillNode *currentKillNode = KillHead;
+    KillNode *previousKillNode = NULL;
 
     while (currentKillNode != NULL)
     {
@@ -613,7 +632,7 @@ void processKillEvent(int currentTime, SystemQueues *systemQueues, PCBNode **run
         {
             PCBNode *pcb = hashmapGet(currentKillNode->processId);
 
-            if (pcb != NULL && pcb->isKilled == false && pcb->state != TERMINATED)
+            if (pcb != NULL && pcb->isKilled == false && pcb->state != COMPLETED)
             {
                 pcb->state = KILLED;
                 pcb->isKilled = true;
@@ -630,12 +649,12 @@ void processKillEvent(int currentTime, SystemQueues *systemQueues, PCBNode **run
                 enqueue(systemQueues->terminatedQueue, pcb);
             }
 
-            KILLNode *nodeToBeDeleted = currentKillNode;
+            KillNode *nodeToBeDeleted = currentKillNode;
 
             if (previousKillNode == NULL)
             {
-                KILLHead = KILLHead->next;
-                currentKillNode = KILLHead;
+                KillHead = KillHead->next;
+                currentKillNode = KillHead;
             }
             else
             {
@@ -707,54 +726,92 @@ void handleInputOutputTime(Queue *waitingQueue, Queue *readyQueue)
     }
 }
 
+bool systemHasActiveProcesses(SystemQueues *queues, PCBNode *running)
+{
+    if (queues->readyQueue->sizeOfQueue > 0 || queues->waitingQueue->sizeOfQueue > 0 || running != NULL)
+    {
+        return true;
+    }
+
+    return false;
+}
+
+void dispatchProcess(SystemQueues *queues, PCBNode **running)
+{
+    if (*running != NULL || queues->readyQueue->sizeOfQueue == 0)
+    {
+        return;
+    }
+
+    PCBNode *pcb = dequeue(queues->readyQueue);
+
+    if (pcb == NULL)
+    {
+        return;
+    }
+
+    if (pcb->isKilled)
+    {
+        enqueue(queues->terminatedQueue, pcb);
+        return;
+    }
+
+    pcb->state = RUNNING;
+    *running = pcb;
+}
+
+void executeCPU(PCBNode *running)
+{
+    running->currentBurstTime++;
+    running->executionTime++;
+    running->remainingBurstTime--;
+}
+
+void checkProcessStateTransition(SystemQueues *queues, PCBNode **running, int currentTime)
+{
+    PCBNode *pcb = *running;
+
+    if (pcb == NULL)
+    {
+        return;
+    }
+
+    if (pcb->currentBurstTime == pcb->inputOutputStartTime && pcb->inputOutputDurationTime > 0)
+    {
+        pcb->state = WAITING;
+        pcb->remainingInputOutputTime = pcb->inputOutputDurationTime;
+        pcb->inputOutputJustStartedFlag = 1;
+
+        enqueue(queues->waitingQueue, pcb);
+        *running = NULL;
+
+        return;
+    }
+
+    if (pcb->remainingBurstTime <= 0)
+    {
+        pcb->state = COMPLETED;
+        pcb->completionTime = currentTime + 1;
+
+        enqueue(queues->terminatedQueue, pcb);
+        *running = NULL;
+    }
+}
+
 void handleSchedulingOfProcesses(SystemQueues *systemQueues)
 {
     int currentTime = 0;
-
     PCBNode *runningProcess = NULL;
 
-    while (systemQueues->readyQueue->sizeOfQueue > 0 || systemQueues->waitingQueue->sizeOfQueue > 0 || runningProcess != NULL)
+    while (systemHasActiveProcesses(systemQueues, runningProcess))
     {
         processKillEvent(currentTime, systemQueues, &runningProcess);
-
-        if (runningProcess == NULL && systemQueues->readyQueue->sizeOfQueue > 0)
-        {
-            PCBNode *currentNode = dequeue(systemQueues->readyQueue);
-
-            if (currentNode != NULL && !currentNode->isKilled)
-            {
-                runningProcess = currentNode;
-            }
-            else if (currentNode != NULL)
-            {
-                enqueue(systemQueues->terminatedQueue, currentNode);
-            }
-        }
+        dispatchProcess(systemQueues, &runningProcess);
 
         if (runningProcess != NULL)
         {
-            runningProcess->currentBurstTime++;
-            runningProcess->executionTime++;
-            runningProcess->remainingBurstTime--;
-
-            if (runningProcess->currentBurstTime == runningProcess->inputOutputStartTime && runningProcess->inputOutputDurationTime > 0)
-            {
-                runningProcess->state = WAITING;
-                runningProcess->remainingInputOutputTime = runningProcess->inputOutputDurationTime;
-                runningProcess->currentInputOutputTime = 0;
-                runningProcess->inputOutputJustStartedFlag = 1;
-
-                enqueue(systemQueues->waitingQueue, runningProcess);
-                runningProcess = NULL;
-            }
-            else if (runningProcess->remainingBurstTime <= 0)
-            {
-                runningProcess->completionTime = currentTime + 1;
-                runningProcess->state = TERMINATED;
-
-                enqueue(systemQueues->terminatedQueue, runningProcess);
-                runningProcess = NULL;
-            }
+            executeCPU(runningProcess);
+            checkProcessStateTransition(systemQueues, &runningProcess, currentTime);
         }
 
         handleInputOutputTime(systemQueues->waitingQueue, systemQueues->readyQueue);
@@ -924,16 +981,16 @@ void freeHashmap()
 
 void freeKillNodes()
 {
-    KILLNode *currentKillNode = KILLHead;
+    KillNode *currentKillNode = KillHead;
 
     while (currentKillNode != NULL)
     {
-        KILLNode *nextKillNode = currentKillNode->next;
+        KillNode *nextKillNode = currentKillNode->next;
         free(currentKillNode);
         currentKillNode = nextKillNode;
     }
 
-    KILLHead = NULL;
+    KillHead = NULL;
 }
 
 void freeMemory(SystemQueues *systemQueues)
