@@ -122,7 +122,7 @@ int readArray(Pipe *pipeData)
 
     for (int currentDataIndex = 0; currentDataIndex < pipeData->arraySize; currentDataIndex++)
     {
-        if (scanf("%d", &pipeData->array[currentDataIndex]))
+        if (scanf("%d", &pipeData->array[currentDataIndex]) != 1)
         {
             printf("Array element must be an integer value. \n");
             return INVALID_INPUT;

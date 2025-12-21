@@ -110,7 +110,7 @@ int readArray(SharedData *data)
 
     for (int currentDataIndex = 0; currentDataIndex < data->arraySize; currentDataIndex++)
     {
-        if (scanf("%d", &data->array[currentDataIndex]))
+        if (scanf("%d", &data->array[currentDataIndex]) != 1)
         {
             printf("Array element must be an integer value. \n");
             return INVALID_INPUT;
